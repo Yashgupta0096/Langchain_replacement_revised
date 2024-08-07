@@ -4,6 +4,8 @@ from xagent.actor import ToolServer
 from config import Config
 from services.run_log import RunLogsManager
 from typings.agent import AgentWithConfigsOutput
+from typing import List, Optional
+
 
 class DialogueAgentWithToolsXAgent:
     def __init__(
@@ -12,13 +14,17 @@ class DialogueAgentWithToolsXAgent:
         agent_with_configs: AgentWithConfigsOutput,
         system_message: SystemMessage,
         model: ChatOpenAI,
-        tools: List[any],
+        tools: List[Tool],
         session_id: str,
         sender_name: str,
         is_memory: bool = False,
         run_logs_manager: Optional[RunLogsManager] = None,
         **tool_kwargs,
     ) -> None:
+        self.name = name
+        self.agent_with_configs = agent_with_configs
+        self.system_message = system_message
+        self.model = model
         self.tools = tools
         self.session_id = session_id
         self.sender_name = sender_name
@@ -26,10 +32,8 @@ class DialogueAgentWithToolsXAgent:
         self.run_logs_manager = run_logs_manager
 
     def send(self) -> str:
-        memory: ToolServer
-
         memory = ToolServer(
-            'memory',
+            "memory",
             session_id=str(self.session_id),
             url=Config.TOOL_SERVER_URL,
             api_key=Config.TOOL_SERVER_API_KEY,
@@ -41,12 +45,11 @@ class DialogueAgentWithToolsXAgent:
         memory.auto_save = False
 
         callbacks = []
-
         if self.run_logs_manager:
             callbacks.append(self.run_logs_manager.get_agent_callback_handler())
 
         task = Task(
-            task_type='chat',
+            task_type="chat",
             task_id=str(self.session_id),
             content="\n".join(self.message_history + [self.prefix]),
             tools=self.tools,
@@ -62,5 +65,4 @@ class DialogueAgentWithToolsXAgent:
         dispatcher.dispatch(planner, actor)
 
         res = task.get_result()
-
         return res
