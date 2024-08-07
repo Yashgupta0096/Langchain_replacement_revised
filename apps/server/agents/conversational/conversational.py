@@ -8,25 +8,32 @@ from services.pubsub import ChatPubSubService
 from services.run_log import RunLogsManager
 from typings.config import AccountSettings, AccountVoiceSettings
 from utils.system_message import SystemMessageBuilder
+from typings.agent import AgentWithConfigsOutput
+from typing import List, Optional
+
 
 class ConversationalAgentXAgent:
+    def __init__(self, session_id: str, sender_name: str):
+        self.session_id = session_id
+        self.sender_name = sender_name
+
     def run(
         self,
         settings: AccountSettings,
         voice_settings: AccountVoiceSettings,
         chat_pubsub_service: ChatPubSubService,
         agent_with_configs: AgentWithConfigsOutput,
-        tools,
+        tools: List[ToolServer],  # Adjust type if necessary
         prompt: str,
-        voice_url: str,
+        voice_url: Optional[str],
         history: PostgresChatMessageHistory,
         human_message_id: str,
         run_logs_manager: RunLogsManager,
         pre_retrieved_context: str,
-    ):
+    ) -> str:
         memory = ToolServer(
-            'memory',
-            session_id=str(self.session_id),
+            "memory",
+            session_id=self.session_id,
             url=Config.TOOL_SERVER_URL,
             api_key=Config.TOOL_SERVER_API_KEY,
             return_messages=True,
@@ -40,15 +47,15 @@ class ConversationalAgentXAgent:
         ).build()
 
         res: str
+        configs = agent_with_configs.configs
 
         try:
             if voice_url:
-                configs = agent_with_configs.configs
                 prompt = speech_to_text(voice_url, configs, voice_settings)
 
             task = Task(
-                task_type='conversation',
-                task_id=str(self.session_id),
+                task_type="conversation",
+                task_id=self.session_id,
                 content=prompt,
                 tools=tools,
                 memory=memory,
@@ -66,17 +73,17 @@ class ConversationalAgentXAgent:
 
         except Exception as err:
             # handle error
-            pass
+            print(f"Error during task execution: {err}")
+            res = "An error occurred during task execution."
 
         try:
-            configs = agent_with_configs.configs
-            voice_url = None
             if "Voice" in configs.response_mode:
                 voice_url = text_to_speech(res, configs, voice_settings)
-                
+
         except Exception as err:
             # handle error
-            pass
+            print(f"Error during text-to-speech conversion: {err}")
+            voice_url = None
 
         ai_message = history.create_ai_message(
             res,
